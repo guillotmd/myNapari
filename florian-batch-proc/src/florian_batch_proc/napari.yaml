@@ -1,0 +1,12 @@
+schema_version: 0.1.0
+name: florian-batch-proc
+display_name: UNP Batch Processing
+contributions:
+  commands:
+    - id: florian-batch-proc.batch_widget
+      python_name: florian_batch_proc._batch_widget:BatchUNPWidget
+      title: UNP Batch Processing
+  widgets:
+    - command: florian-batch-proc.batch_widget
+      display_name: UNP Batch Processing
+      autogenerate: false

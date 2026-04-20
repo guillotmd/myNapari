@@ -1,0 +1,42 @@
+schema_version: 0.1.0
+name: florian-segmentation-mac
+display_name: B-Scan Seg
+contributions:
+  commands:
+    - id: florian-segmentation-mac.onnx_bscan_seg
+      title: ONNX B-scan Segmentation (Mac CPU)
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_cpu
+    - id: florian-segmentation-mac.onnx_bscan_seg_mps
+      title: ONNX B-scan Segmentation (Mac MPS)
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_mps
+    - id: florian-segmentation-mac.deconjugate
+      title: ONNX B-scan Deconjugation (Mac CPU)
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_deconj_plugin_cpu
+    - id: florian-segmentation-mac.deconjugate_mps
+      title: ONNX B-scan Deconjugation (Mac MPS)
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_deconj_plugin_mps
+    - id: florian-segmentation-mac.onnx_enface_seg
+      title: ONNX Enface Segmentation (Mac CPU)
+      python_name: florian_segmentation_mac._segmentation:enface_onnx_seg_plugin_cpu
+    - id: florian-segmentation-mac.onnx_enface_seg_mps
+      title: ONNX Enface Segmentation (Mac MPS)
+      python_name: florian_segmentation_mac._segmentation:enface_onnx_seg_plugin_mps
+  widgets:
+    - command: florian-segmentation-mac.onnx_bscan_seg
+      display_name: B-scan Seg (Mac CPU)
+      autogenerate: false
+    - command: florian-segmentation-mac.onnx_bscan_seg_mps
+      display_name: B-scan Seg (Mac MPS)
+      autogenerate: false
+    - command: florian-segmentation-mac.deconjugate
+      display_name: B-scan Deconj (Mac CPU)
+      autogenerate: false
+    - command: florian-segmentation-mac.deconjugate_mps
+      display_name: B-scan Deconj (Mac MPS)
+      autogenerate: false
+    - command: florian-segmentation-mac.onnx_enface_seg
+      display_name: Enface Seg (Mac CPU)
+      autogenerate: false
+    - command: florian-segmentation-mac.onnx_enface_seg_mps
+      display_name: Enface Seg (Mac MPS)
+      autogenerate: false

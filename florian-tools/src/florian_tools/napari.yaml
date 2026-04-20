@@ -1,0 +1,54 @@
+schema_version: 0.1.0
+name: florian-tools
+display_name: COOL Tools Florian
+contributions:
+  commands:
+    - id: florian-tools.batch_processor
+      python_name: florian_tools._widgets:BatchUNPWidget
+      title: UNP Batch Processing
+    - id: florian-tools.bscan_seg_cpu
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_cpu
+      title: B-scan Seg (Mac CPU)
+    - id: florian-tools.bscan_seg_mps
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_mps
+      title: B-scan Seg (Mac MPS)
+    - id: florian-tools.bscan_deconj_cpu
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_deconj_plugin_cpu
+      title: B-scan Deconj (Mac CPU)
+    - id: florian-tools.bscan_deconj_mps
+      python_name: florian_segmentation_mac._segmentation:bscan_onnx_deconj_plugin_mps
+      title: B-scan Deconj (Mac MPS)
+    - id: florian-tools.enface_seg_cpu
+      python_name: florian_segmentation_mac._segmentation:enface_onnx_seg_plugin_cpu
+      title: Enface Seg (Mac CPU)
+    - id: florian-tools.enface_seg_mps
+      python_name: florian_segmentation_mac._segmentation:enface_onnx_seg_plugin_mps
+      title: Enface Seg (Mac MPS)
+    - id: florian-tools.tumor_volume
+      python_name: florian_tumor_vol._tumor_widget:TumorVolumeWidget
+      title: Tumor Volume (Auto)
+  widgets:
+    - command: florian-tools.batch_processor
+      display_name: UNP Batch Processing
+      autogenerate: false
+    - command: florian-tools.bscan_seg_cpu
+      display_name: B-scan Seg (Mac CPU)
+      autogenerate: false
+    - command: florian-tools.bscan_seg_mps
+      display_name: B-scan Seg (Mac MPS)
+      autogenerate: false
+    - command: florian-tools.bscan_deconj_cpu
+      display_name: B-scan Deconj (Mac CPU)
+      autogenerate: false
+    - command: florian-tools.bscan_deconj_mps
+      display_name: B-scan Deconj (Mac MPS)
+      autogenerate: false
+    - command: florian-tools.enface_seg_cpu
+      display_name: Enface Seg (Mac CPU)
+      autogenerate: false
+    - command: florian-tools.enface_seg_mps
+      display_name: Enface Seg (Mac MPS)
+      autogenerate: false
+    - command: florian-tools.tumor_volume
+      display_name: Tumor Volume (Auto)
+      autogenerate: false

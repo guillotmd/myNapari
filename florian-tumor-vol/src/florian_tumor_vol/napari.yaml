@@ -1,0 +1,12 @@
+schema_version: 0.1.0
+name: florian-tumor-vol
+display_name: Tumor Volume
+contributions:
+  commands:
+    - id: florian-tumor-vol.tumor_volume
+      title: Tumor Volume (Auto)
+      python_name: florian_tumor_vol._tumor_widget:TumorVolumeWidget
+  widgets:
+    - command: florian-tumor-vol.tumor_volume
+      display_name: Tumor Volume (Auto)
+      autogenerate: false
