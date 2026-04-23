@@ -1,51 +1,60 @@
 import numpy as np
 from typing import Tuple
 
-def extract_edges(segmentation_slice: np.ndarray, retina_label: int = 1, choroid_label: int = 2) -> Tuple[np.ndarray, np.ndarray]:
+def extract_edges(
+    segmentation_slice: np.ndarray, 
+    retina_label: int = 1, 
+    choroid_label: int = 2,
+    min_thickness: int = 5,
+    ignore_top_px: int = 0
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Extract the topmost (min y) inner retinal and inner choroidal edges from a 2D segmentation slice.
-    
-    Expected format of segmentation_slice: (height, width, 3) or (height, width, 4) RGB/RGBA image
-    or a 2D array where different integer labels represent different classes.
-    Assuming the problem specifies:
-    - Red channel pixels (or a specific label) = inner retinal surface
-    - Blue channel pixels (or a specific label) = inner choroidal surface
-    
-    If it's an RGB image:
-    Red channel dominance -> Retina
-    Blue channel dominance -> Choroid
-    
-    Returns:
-        inner_retina_edge: 1D numpy array of shape (width,) containing the topmost y-coordinate
-                           for the retina at each column. Missing values are represented as np.nan.
-        inner_choroid_edge: 1D numpy array of shape (width,) containing the topmost y-coordinate
-                            for the choroid at each column. Missing values are represented as np.nan.
+    Extract the topmost inner retinal and inner choroidal edges from a 2D segmentation slice.
     """
     if segmentation_slice.ndim == 3 and segmentation_slice.shape[2] >= 3:
-        # RGB(A) image
         red_channel = segmentation_slice[..., 0]
         blue_channel = segmentation_slice[..., 2]
-        
         is_retina = red_channel > 128
         is_choroid = blue_channel > 128
     else:
-        # It's a label image
         is_retina = segmentation_slice == retina_label
         is_choroid = segmentation_slice == choroid_label
 
     height, width = is_retina.shape
     
+    # Apply ignore_top_px by zeroing out the top region
+    if ignore_top_px > 0:
+        is_retina = is_retina.copy()
+        is_choroid = is_choroid.copy()
+        is_retina[:ignore_top_px, :] = False
+        is_choroid[:ignore_top_px, :] = False
+    
     inner_retina_edge = np.full(width, np.nan)
     inner_choroid_edge = np.full(width, np.nan)
     
     for x in range(width):
-        # Find first True along y-axis (topmost)
-        retina_y_indices = np.where(is_retina[:, x])[0]
-        if len(retina_y_indices) > 0:
-            inner_retina_edge[x] = retina_y_indices[0]
-            
-        choroid_y_indices = np.where(is_choroid[:, x])[0]
-        if len(choroid_y_indices) > 0:
-            inner_choroid_edge[x] = choroid_y_indices[0]
+        # Retina: Find groups, filter out thin seeds, take the TOP-most valid group
+        ret_indices = np.where(is_retina[:, x])[0]
+        if len(ret_indices) > 0:
+            breaks = np.where(np.diff(ret_indices) > 1)[0]
+            splits = np.split(ret_indices, breaks + 1)
+            valid_splits = [s for s in splits if len(s) >= min_thickness]
+            if len(valid_splits) > 0:
+                inner_retina_edge[x] = valid_splits[0][0]  # Top layer
+            else:
+                largest = max(splits, key=len)
+                inner_retina_edge[x] = largest[0]
+                
+        # Choroid: Find groups, filter out thin seeds, take the BOTTOM-most valid group
+        cho_indices = np.where(is_choroid[:, x])[0]
+        if len(cho_indices) > 0:
+            breaks = np.where(np.diff(cho_indices) > 1)[0]
+            splits = np.split(cho_indices, breaks + 1)
+            valid_splits = [s for s in splits if len(s) >= min_thickness]
+            if len(valid_splits) > 0:
+                inner_choroid_edge[x] = valid_splits[-1][0] # Bottom layer
+            else:
+                largest = max(splits, key=len)
+                inner_choroid_edge[x] = largest[0]
             
     return inner_retina_edge, inner_choroid_edge

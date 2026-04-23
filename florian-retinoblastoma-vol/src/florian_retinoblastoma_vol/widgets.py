@@ -140,6 +140,16 @@ class RetinoblastomaWidget(QWidget):
         self._edge_margin_cols.setRange(0, 500); self._edge_margin_cols.setValue(15)
         self._add_row(algo_form, "Edge Margin (cols):", self._edge_margin_cols,
             "Number of columns to ignore at the left and right edges of the valid retina scan to prevent false positives.")
+            
+        self._min_layer_thickness = QSpinBox()
+        self._min_layer_thickness.setRange(1, 100); self._min_layer_thickness.setValue(5)
+        self._add_row(algo_form, "Min Layer Thickness (px):", self._min_layer_thickness,
+            "Ignore isolated tissue fragments (like vitreous seeds) thinner than this value.")
+            
+        self._ignore_top_px = QSpinBox()
+        self._ignore_top_px.setRange(0, 1000); self._ignore_top_px.setValue(0)
+        self._add_row(algo_form, "Ignore Top Margin (px):", self._ignore_top_px,
+            "Ignore any segmentation labels in the top N pixels of the image (useful for filtering out floating artifacts).")
 
         layout.addWidget(algo_group)
 
@@ -260,6 +270,8 @@ class RetinoblastomaWidget(QWidget):
             mapping_mode=self._mapping_mode.currentText(),
             elevation_threshold=self._elevation_threshold.value(),
             edge_margin_cols=self._edge_margin_cols.value(),
+            min_layer_thickness=self._min_layer_thickness.value(),
+            ignore_top_px=self._ignore_top_px.value(),
             mesh_smoothing_iters=self._mesh_smoothing.value(),
             generate_3d_render=self._generate_3d.isChecked(),
             show_diagnostic_lines=self._show_diagnostic_lines.isChecked()

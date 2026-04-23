@@ -80,7 +80,9 @@ def execute_retinoblastoma_pipeline(params: dict):
         retina_edge, choroid_edge = extract_edges(
             seg_data[i],
             retina_label=params['retina_label'],
-            choroid_label=params['choroid_label']
+            choroid_label=params['choroid_label'],
+            min_thickness=params.get('min_layer_thickness', 5),
+            ignore_top_px=params.get('ignore_top_px', 0)
         )
         
         retina_surfaces[i] = retina_edge
