@@ -158,7 +158,7 @@ class RetinoblastomaWidget(QWidget):
         opt_layout = QVBoxLayout(opt_group)
 
         self._generate_3d = QCheckBox("Generate 3D Render")
-        self._generate_3d.setChecked(True)
+        self._generate_3d.setChecked(False)
         self._generate_3d.setToolTip("If checked, generates a 3D Surface mesh layer of the tumor.")
         opt_layout.addWidget(self._generate_3d)
 
