@@ -27,6 +27,9 @@ contributions:
     - id: florian-tools.tumor_volume
       python_name: florian_tumor_vol._tumor_widget:TumorVolumeWidget
       title: Tumor Volume (Auto)
+    - id: florian-tools.retinoblastoma_volume
+      python_name: florian_retinoblastoma_vol.widgets:RetinoblastomaWidget
+      title: Retinoblastoma volume
   widgets:
     - command: florian-tools.batch_processor
       display_name: UNP Batch Processing
@@ -51,4 +54,7 @@ contributions:
       autogenerate: false
     - command: florian-tools.tumor_volume
       display_name: Tumor Volume (Auto)
+      autogenerate: false
+    - command: florian-tools.retinoblastoma_volume
+      display_name: Retinoblastoma volume
       autogenerate: false

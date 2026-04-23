@@ -1,0 +1,10 @@
+name: florian-retinoblastoma-vol
+display_name: Cool Tools Florian
+contributions:
+  commands:
+    - id: florian-retinoblastoma-vol.make_widget
+      python_name: florian_retinoblastoma_vol.widgets:make_widget
+      title: Retinoblastoma Volume Plugin
+  widgets:
+    - command: florian-retinoblastoma-vol.make_widget
+      display_name: Retinoblastoma volume
