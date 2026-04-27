@@ -41,7 +41,9 @@ def interpolate_baselines_3d(baselines: dict, n_slices: int, width: int) -> np.n
     return full_baselines
 
 def execute_retinoblastoma_pipeline(params: dict):
-    print("Starting Robust 3D Interpolation Pipeline...")
+    print("\n" + "="*60)
+    print("  Retinoblastoma Volume Pipeline")
+    print("="*60)
     
     scale_calib = ScaleCalibration(
         axial_resolution=params['axial_resolution'],
@@ -69,6 +71,7 @@ def execute_retinoblastoma_pipeline(params: dict):
     )
     
     seg_data = params['seg_data']
+    n_slices_total = n_slices  # for progress display
     
     retina_surfaces = {}
     choroid_surfaces = {}
@@ -77,6 +80,9 @@ def execute_retinoblastoma_pipeline(params: dict):
     
     # 1. Extract 2D Surfaces and Fit Preliminary Baselines
     for i in range(n_slices):
+        print(f"\r  Phase 1/3 — Extracting edges & fitting: "
+              f"[{'█' * ((i+1)*30//n_slices_total)}{' ' * (30-(i+1)*30//n_slices_total)}] "
+              f"{i+1}/{n_slices_total}", end="", flush=True)
         retina_edge, choroid_edge = extract_edges(
             seg_data[i],
             retina_label=params['retina_label'],
@@ -108,8 +114,12 @@ def execute_retinoblastoma_pipeline(params: dict):
             temp_chor = np.full(w, np.nan)
             temp_chor[healthy_cols] = choroid_edge[healthy_cols]
             choroid_baselines[i] = smooth_curve(temp_chor, sigma=20.0)
+
+    print(f"\r  Phase 1/3 — Extracting edges & fitting: "
+          f"[{'█'*30}] {n_slices_total}/{n_slices_total} ✓                  ")
             
     # 2. 3D Cross-Slice Interpolation for missing surfaces/baselines
+    print("  Phase 2/3 — Interpolating across slices...")
     full_retina_surfaces = interpolate_baselines_3d(retina_surfaces, n_slices, w)
     full_retinal_baselines = interpolate_baselines_3d(retinal_baselines, n_slices, w)
     full_choroid_baselines = interpolate_baselines_3d(choroid_baselines, n_slices, w)
@@ -128,6 +138,10 @@ def execute_retinoblastoma_pipeline(params: dict):
     edge_margin_cols = params.get('edge_margin_cols', 15)
     
     for i in range(n_slices):
+        print(f"\r  Phase 3/3 — Building tumor masks: "
+              f"[{'█' * ((i+1)*30//n_slices_total)}{' ' * (30-(i+1)*30//n_slices_total)}] "
+              f"{i+1}/{n_slices_total}", end="", flush=True)
+
         r_surf = full_retina_surfaces[i]
         r_base = full_retinal_baselines[i]
         c_base = full_choroid_baselines[i]
@@ -188,6 +202,9 @@ def execute_retinoblastoma_pipeline(params: dict):
                     if 0 <= y_ret < h:
                         output_mask_3d[i, max(0, y_ret-1):min(h, y_ret+2), x] = retina_line_label
 
+    print(f"\r  Phase 3/3 — Building tumor masks: "
+          f"[{'█'*30}] {n_slices_total}/{n_slices_total} ✓                  ")
+
     # 4. Volume Calculation (Simple voxel count * physical scale)
     # Convert scale to mm
     ax_mm = scale_calib.axial_resolution / 1000.0
@@ -196,8 +213,9 @@ def execute_retinoblastoma_pipeline(params: dict):
     
     total_volume_mm3 = total_voxels * ax_mm * lat_mm * z_mm
     
-    print("Pipeline Complete!")
-    print(f"Total Volume: {total_volume_mm3:.4f} mm³")
+    print(f"\n  ✅ Pipeline Complete!")
+    print(f"  Total Volume: {total_volume_mm3:.4f} mm³")
+    print("="*60 + "\n")
     
     # 5. Mesh Generation
     mesh_data = None
@@ -212,7 +230,8 @@ def execute_retinoblastoma_pipeline(params: dict):
         else:
             print("Could not generate 3D mesh (insufficient volume).")
             
-    return output_mask_3d, total_volume_mm3, 0.0, mesh_data, tumor_label
+    bscan_name = params.get('bscan_name', 'Retinoblastoma')
+    return output_mask_3d, total_volume_mm3, 0.0, mesh_data, tumor_label, bscan_name
 
 def recalculate_volume(mask_3d: np.ndarray, tumor_label: int, params: dict) -> float:
     """

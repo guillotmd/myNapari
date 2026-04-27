@@ -274,7 +274,8 @@ class RetinoblastomaWidget(QWidget):
             ignore_top_px=self._ignore_top_px.value(),
             mesh_smoothing_iters=self._mesh_smoothing.value(),
             generate_3d_render=self._generate_3d.isChecked(),
-            show_diagnostic_lines=self._show_diagnostic_lines.isChecked()
+            show_diagnostic_lines=self._show_diagnostic_lines.isChecked(),
+            bscan_name=bscan_layer.name,
         )
 
         self._run_btn.setEnabled(False)
@@ -294,10 +295,10 @@ class RetinoblastomaWidget(QWidget):
             self._run_btn.setText("▶ Calculate Tumor Volume")
             return
 
-        tumor_mask, volume, uncertainty, mesh_data, output_tumor_label = result
+        tumor_mask, volume, uncertainty, mesh_data, output_tumor_label, bscan_name = result
 
         # 1. Update Labels layer
-        mask_name = "Retinoblastoma Output Mask"
+        mask_name = f"{bscan_name}_Tumor_Mask_Linear"
         existing_mask = self._get_layer(mask_name)
         if existing_mask is not None:
             existing_mask.data = tumor_mask
@@ -307,7 +308,7 @@ class RetinoblastomaWidget(QWidget):
         # 2. Update Surface layer if requested
         if mesh_data is not None:
             verts, faces, vals = mesh_data
-            surface_name = "Retinoblastoma 3D Surface"
+            surface_name = f"{bscan_name}_Tumor_3D_Linear"
             existing_surf = self._get_layer(surface_name)
             if existing_surf is not None:
                 existing_surf.data = (verts, faces, vals)
@@ -331,7 +332,7 @@ class RetinoblastomaWidget(QWidget):
         
         output_layer = None
         for layer in self.viewer.layers:
-            if layer.name == "Retinoblastoma Output Mask":
+            if isinstance(layer, Labels) and layer.name.endswith("_Tumor_Mask_Linear"):
                 output_layer = layer
                 break
                 
@@ -340,7 +341,7 @@ class RetinoblastomaWidget(QWidget):
             if isinstance(selected, Labels):
                 output_layer = selected
             else:
-                show_info("Could not find Retinoblastoma Output Mask layer. Select it and try again.")
+                show_info("No _Tumor_Mask layer found. Select a mask layer and try again.")
                 return
 
         params = dict(

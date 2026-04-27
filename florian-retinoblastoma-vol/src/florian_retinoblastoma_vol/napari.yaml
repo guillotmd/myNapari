@@ -1,10 +1,10 @@
 name: florian-retinoblastoma-vol
-display_name: Cool Tools Florian
+display_name: Generate Tumor Mask (Linear)
 contributions:
   commands:
-    - id: florian-retinoblastoma-vol.make_widget
-      python_name: florian_retinoblastoma_vol.widgets:make_widget
-      title: Retinoblastoma Volume Plugin
+    - id: florian-retinoblastoma-vol.retinoblastoma_widget
+      python_name: florian_retinoblastoma_vol.widgets:RetinoblastomaWidget
+      title: Generate Tumor Mask (Linear)
   widgets:
-    - command: florian-retinoblastoma-vol.make_widget
-      display_name: Retinoblastoma volume
+    - command: florian-retinoblastoma-vol.retinoblastoma_widget
+      display_name: Generate Tumor Mask (Linear)
