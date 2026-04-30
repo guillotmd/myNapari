@@ -101,15 +101,15 @@ class RetinoblastomaWidget(QWidget):
 
         self._axial_res = QDoubleSpinBox()
         self._axial_res.setRange(0.1, 100.0); self._axial_res.setDecimals(2); self._axial_res.setValue(3.87)
-        self._axial_res.setToolTip("Depth resolution per pixel in the B-scan.")
+        self._axial_res.setToolTip("Axial Resolution (µm): Physical depth dimension of a single voxel in the B-scan. Crucial for accurate 3D volume mapping.")
         
         self._lateral_res = QDoubleSpinBox()
         self._lateral_res.setRange(0.1, 100.0); self._lateral_res.setDecimals(2); self._lateral_res.setValue(11.5)
-        self._lateral_res.setToolTip("Horizontal resolution per pixel in the B-scan.")
+        self._lateral_res.setToolTip("Lateral Resolution (µm): Physical horizontal dimension of a single voxel in the B-scan. Crucial for accurate 3D volume mapping.")
         
         self._spacing = QDoubleSpinBox()
         self._spacing.setRange(0.1, 500.0); self._spacing.setDecimals(2); self._spacing.setValue(120.0)
-        self._spacing.setToolTip("Physical distance between consecutive B-scans.")
+        self._spacing.setToolTip("Inter-slice Spacing (µm): Physical distance between consecutive B-scans. Crucial for accurate 3D volume mapping.")
 
         scale_layout.addWidget(QLabel("Axial:")); scale_layout.addWidget(self._axial_res)
         scale_layout.addWidget(QLabel("Lat:")); scale_layout.addWidget(self._lateral_res)
@@ -157,15 +157,31 @@ class RetinoblastomaWidget(QWidget):
         opt_group = QGroupBox("Output Options")
         opt_layout = QVBoxLayout(opt_group)
 
+        self._show_tumor_mask = QCheckBox("Show Tumor Mask")
+        self._show_tumor_mask.setChecked(True)
+        self._show_tumor_mask.setToolTip("If checked, outputs the actual tumor volume mask.")
+        opt_layout.addWidget(self._show_tumor_mask)
+
         self._generate_3d = QCheckBox("Generate 3D Render")
         self._generate_3d.setChecked(False)
         self._generate_3d.setToolTip("If checked, generates a 3D Surface mesh layer of the tumor.")
         opt_layout.addWidget(self._generate_3d)
 
+        diag_layout = QHBoxLayout()
         self._show_diagnostic_lines = QCheckBox("Show Diagnostic Lines (Labels 4 & 5)")
         self._show_diagnostic_lines.setChecked(False)
         self._show_diagnostic_lines.setToolTip("If checked, adds the computed retina curve and choroid baseline to the output mask.")
-        opt_layout.addWidget(self._show_diagnostic_lines)
+        
+        self._diagnostic_line_thickness = QSpinBox()
+        self._diagnostic_line_thickness.setRange(1, 20)
+        self._diagnostic_line_thickness.setValue(5)
+        self._diagnostic_line_thickness.setToolTip("Thickness of the diagnostic lines in pixels.")
+        
+        diag_layout.addWidget(self._show_diagnostic_lines)
+        diag_layout.addWidget(QLabel("Thickness:"))
+        diag_layout.addWidget(self._diagnostic_line_thickness)
+        diag_layout.addStretch()
+        opt_layout.addLayout(diag_layout)
 
         self._mesh_smoothing = QSpinBox()
         self._mesh_smoothing.setRange(0, 50); self._mesh_smoothing.setValue(10)
@@ -324,8 +340,10 @@ class RetinoblastomaWidget(QWidget):
             min_layer_thickness=self._min_layer_thickness.value(),
             ignore_top_px=self._ignore_top_px.value(),
             mesh_smoothing_iters=self._mesh_smoothing.value(),
+            show_tumor_mask=self._show_tumor_mask.isChecked(),
             generate_3d_render=self._generate_3d.isChecked(),
             show_diagnostic_lines=self._show_diagnostic_lines.isChecked(),
+            diagnostic_line_thickness=self._diagnostic_line_thickness.value(),
             bscan_name=bscan_layer.name,
             # Advanced improvement toggles
             use_choroid_filter=self._use_choroid_filter.isChecked(),
@@ -358,9 +376,9 @@ class RetinoblastomaWidget(QWidget):
             self._run_btn.setText("▶ Calculate Tumor Volume")
             return
 
-        tumor_mask, volume, uncertainty, mesh_data, output_tumor_label, bscan_name = result
+        tumor_mask, volume, uncertainty, mesh_data, output_tumor_label, bscan_name, params = result
 
-        # 1. Update Labels layer
+        # 1. Update 2D unscaled Labels layer (Process remains identical)
         mask_name = f"{bscan_name}_Tumor_Mask_Linear"
         existing_mask = self._get_layer(mask_name)
         if existing_mask is not None:
@@ -368,15 +386,45 @@ class RetinoblastomaWidget(QWidget):
         else:
             self.viewer.add_labels(tumor_mask, name=mask_name)
 
-        # 2. Update Surface layer if requested
-        if mesh_data is not None:
-            verts, faces, vals = mesh_data
-            surface_name = f"{bscan_name}_Tumor_3D_Linear"
-            existing_surf = self._get_layer(surface_name)
-            if existing_surf is not None:
-                existing_surf.data = (verts, faces, vals)
+        # 2. Update 3D visualization layers if requested
+        if params.get('generate_3d_render', False):
+            scale_tuple = (
+                params['inter_slice_spacing'],
+                params['axial_resolution'],
+                params['lateral_resolution']
+            )
+
+            # Duplicate the original B-scan for 3D physical viewing
+            image_3d_name = f"{bscan_name}_3D_Volume"
+            bscan_layer = self._get_layer(bscan_name)
+            existing_img_3d = self._get_layer(image_3d_name)
+            if bscan_layer is not None:
+                if existing_img_3d is not None:
+                    existing_img_3d.data = bscan_layer.data
+                    existing_img_3d.scale = scale_tuple
+                else:
+                    self.viewer.add_image(bscan_layer.data, name=image_3d_name, scale=scale_tuple, colormap=bscan_layer.colormap, visible=False)
+
+            # Duplicate the mask for 3D physical viewing
+            mask_3d_name = f"{bscan_name}_Tumor_Mask_3D"
+            existing_mask_3d = self._get_layer(mask_3d_name)
+            if existing_mask_3d is not None:
+                existing_mask_3d.data = tumor_mask
+                existing_mask_3d.scale = scale_tuple
             else:
-                self.viewer.add_surface((verts, faces, vals), name=surface_name, colormap="turbo")
+                self.viewer.add_labels(tumor_mask, name=mask_3d_name, scale=scale_tuple, visible=False)
+
+            # Update the physically-scaled Surface layer
+            if mesh_data is not None:
+                verts, faces, vals = mesh_data
+                surface_name = f"{bscan_name}_Tumor_3D_Surface"
+                existing_surf = self._get_layer(surface_name)
+                if existing_surf is not None:
+                    existing_surf.data = (verts, faces, vals)
+                else:
+                    self.viewer.add_surface((verts, faces, vals), name=surface_name, colormap="turbo")
+            
+            self.viewer.dims.ndisplay = 3
 
         if uncertainty > 0:
             self._result_label.setText(f"Volume: {volume:.4f} ± {uncertainty:.4f} mm³")

@@ -583,6 +583,7 @@ def compute_tumor_mask_volume(
     min_layer_thickness: int = 5,
     ignore_top_px: int = 0,
     show_diagnostic_lines: bool = False,
+    diagnostic_line_thickness: int = 5,
     use_morphological_cleanup: bool = False,
     use_weighted_fitting: bool = False,
     progress_callback=None,
@@ -780,15 +781,17 @@ def compute_tumor_mask_volume(
 
         # Optional diagnostic lines
         if show_diagnostic_lines:
+            half_t_minus = diagnostic_line_thickness // 2
+            half_t_plus = diagnostic_line_thickness - half_t_minus
             for x in range(W):
                 if not np.isnan(c_base[x]):
                     y = int(round(c_base[x]))
                     if 0 <= y < H:
-                        tumor_mask_3d[bscan_idx, max(0, y-1):min(H, y+2), x] = 5
+                        tumor_mask_3d[bscan_idx, max(0, y-half_t_minus):min(H, y+half_t_plus), x] = 5
                 if not np.isnan(r_base[x]):
                     y = int(round(r_base[x]))
                     if 0 <= y < H:
-                        tumor_mask_3d[bscan_idx, max(0, y-1):min(H, y+2), x] = 4
+                        tumor_mask_3d[bscan_idx, max(0, y-half_t_minus):min(H, y+half_t_plus), x] = 4
 
     _progress("Phase 4/4 — Building masks:", D, D, done=True)
 

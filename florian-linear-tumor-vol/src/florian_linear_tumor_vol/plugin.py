@@ -274,6 +274,9 @@ def execute_retinoblastoma_pipeline(params: dict):
     total_voxels = 0
 
     show_lines = params.get('show_diagnostic_lines', False)
+    line_thickness = params.get('diagnostic_line_thickness', 5)
+    half_t_minus = line_thickness // 2
+    half_t_plus = line_thickness - half_t_minus
     edge_margin_cols = params.get('edge_margin_cols', 15)
 
     for i in range(N):
@@ -313,7 +316,8 @@ def execute_retinoblastoma_pipeline(params: dict):
                 top = int(round(r_surf[x]))
                 bot = int(round(c_base[x]))
                 if bot > top:
-                    output_mask_3d[i, max(0, top):min(h, bot+1), x] = tumor_label
+                    if params.get('show_tumor_mask', True):
+                        output_mask_3d[i, max(0, top):min(h, bot+1), x] = tumor_label
                     total_voxels += (min(h, bot+1) - max(0, top))
 
         if show_lines:
@@ -321,11 +325,11 @@ def execute_retinoblastoma_pipeline(params: dict):
                 if not np.isnan(c_base[x]):
                     y_base = int(round(c_base[x]))
                     if 0 <= y_base < h:
-                        output_mask_3d[i, max(0, y_base-1):min(h, y_base+2), x] = baseline_line_label
+                        output_mask_3d[i, max(0, y_base-half_t_minus):min(h, y_base+half_t_plus), x] = baseline_line_label
                 if not np.isnan(r_surf[x]):
                     y_ret = int(round(r_surf[x]))
                     if 0 <= y_ret < h:
-                        output_mask_3d[i, max(0, y_ret-1):min(h, y_ret+2), x] = retina_line_label
+                        output_mask_3d[i, max(0, y_ret-half_t_minus):min(h, y_ret+half_t_plus), x] = retina_line_label
 
     _progress("Phase 4/4 — Building tumor masks:", N, N, done=True)
 
@@ -393,7 +397,7 @@ def execute_retinoblastoma_pipeline(params: dict):
 
     _progress_callback = None
     bscan_name = params.get('bscan_name', 'Retinoblastoma')
-    return output_mask_3d, total_volume_mm3, uncertainty_mm3, mesh_data, tumor_label, bscan_name
+    return output_mask_3d, total_volume_mm3, uncertainty_mm3, mesh_data, tumor_label, bscan_name, params
 
 def recalculate_volume(mask_3d: np.ndarray, tumor_label: int, params: dict) -> tuple[float, float]:
     """

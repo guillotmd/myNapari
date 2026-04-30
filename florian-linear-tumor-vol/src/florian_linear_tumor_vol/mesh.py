@@ -61,7 +61,7 @@ def generate_tumor_mesh_from_2d_masks(
     try:
         verts, faces, normals, values = marching_cubes(
             masks_3d, 
-            level=0.5, 
+            level=0.5,
             spacing=spacing
         )
     except RuntimeError:

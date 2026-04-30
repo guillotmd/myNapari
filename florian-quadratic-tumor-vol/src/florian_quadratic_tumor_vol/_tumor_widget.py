@@ -138,12 +138,23 @@ class TumorVolumeWidget(QWidget):
         opt_group = QGroupBox("Output Options")
         opt_form = QFormLayout(opt_group)
 
+        diag_layout = QHBoxLayout()
         self._show_diagnostic_lines = QCheckBox("Show diagnostic lines (labels 4 & 5)")
         self._show_diagnostic_lines.setChecked(False)
         self._show_diagnostic_lines.setToolTip(
             "Draw the fitted retinal baseline (label 4) and choroid\n"
             "baseline (label 5) on the output mask for visual verification.")
-        opt_form.addRow(self._show_diagnostic_lines)
+            
+        self._diagnostic_line_thickness = QSpinBox()
+        self._diagnostic_line_thickness.setRange(1, 20)
+        self._diagnostic_line_thickness.setValue(5)
+        self._diagnostic_line_thickness.setToolTip("Thickness of the diagnostic lines in pixels.")
+
+        diag_layout.addWidget(self._show_diagnostic_lines)
+        diag_layout.addWidget(QLabel("Thickness:"))
+        diag_layout.addWidget(self._diagnostic_line_thickness)
+        diag_layout.addStretch()
+        opt_form.addRow(diag_layout)
 
         self._generate_3d = QCheckBox("Generate 3D surface mesh")
         self._generate_3d.setChecked(False)
@@ -312,6 +323,7 @@ class TumorVolumeWidget(QWidget):
             min_layer_thickness=self._min_layer_thickness.value(),
             ignore_top_px=self._ignore_top_px.value(),
             show_diagnostic_lines=self._show_diagnostic_lines.isChecked(),
+            diagnostic_line_thickness=self._diagnostic_line_thickness.value(),
             vol_name=vol_layer.name,
             generate_3d_render=self._generate_3d.isChecked(),
             mesh_smoothing_iters=self._mesh_smoothing.value(),
@@ -362,15 +374,39 @@ class TumorVolumeWidget(QWidget):
         else:
             self._tumor_layer = self.viewer.add_labels(tumor_mask, name=layer_name)
 
-        # Add 3D mesh if generated
+        # Add 3D visualization layers if generated
         if mesh_data is not None:
             verts, faces, vals = mesh_data
+            
+            # Duplicate the original volume for 3D physical viewing
+            image_3d_name = f"{vol_name}_3D_Volume"
+            vol_layer = self._get_layer(vol_name)
+            existing_img_3d = self._get_layer(image_3d_name)
+            if vol_layer is not None:
+                if existing_img_3d is not None:
+                    existing_img_3d.data = vol_layer.data
+                    existing_img_3d.scale = voxel_size
+                else:
+                    self.viewer.add_image(vol_layer.data, name=image_3d_name, scale=voxel_size, colormap=vol_layer.colormap, visible=False)
+
+            # Duplicate the mask for 3D physical viewing
+            mask_3d_name = f"{vol_name}_Tumor_Mask_3D"
+            existing_mask_3d = self._get_layer(mask_3d_name)
+            if existing_mask_3d is not None:
+                existing_mask_3d.data = tumor_mask
+                existing_mask_3d.scale = voxel_size
+            else:
+                self.viewer.add_labels(tumor_mask, name=mask_3d_name, scale=voxel_size, visible=False)
+
+            # Add the Surface mesh
             surf_name = f"{vol_name}_Tumor_3D_Quadratic"
             existing_surf = self._get_layer(surf_name)
             if existing_surf is not None:
                 existing_surf.data = (verts, faces, vals)
             else:
                 self.viewer.add_surface((verts, faces, vals), name=surf_name, colormap="turbo")
+                
+            self.viewer.dims.ndisplay = 3
 
         self._display_volume(volume_mm3, voxel_size)
         show_info(f"Tumor detection complete. Volume: {volume_mm3:.3f} mm³")
@@ -424,7 +460,7 @@ def _run_detection_thread(
     anterior_label_val, baseline_label_val, tumor_label_val,
     spline_smoothing, min_elevation_px, edge_margin_cols, margin_below_px,
     robust_sigma, robust_iters, enface_roi_mask, voxel_size_mm,
-    min_layer_thickness, ignore_top_px, show_diagnostic_lines,
+    min_layer_thickness, ignore_top_px, show_diagnostic_lines, diagnostic_line_thickness,
     vol_name, generate_3d_render, mesh_smoothing_iters,
     use_morphological_cleanup, use_weighted_fitting,
 ):
@@ -455,6 +491,7 @@ def _run_detection_thread(
                 min_layer_thickness=min_layer_thickness,
                 ignore_top_px=ignore_top_px,
                 show_diagnostic_lines=show_diagnostic_lines,
+                diagnostic_line_thickness=diagnostic_line_thickness,
                 use_morphological_cleanup=use_morphological_cleanup,
                 use_weighted_fitting=use_weighted_fitting,
                 progress_callback=_cb,
