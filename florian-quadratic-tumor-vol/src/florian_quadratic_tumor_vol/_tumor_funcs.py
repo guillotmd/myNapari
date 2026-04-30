@@ -128,7 +128,7 @@ def _roi_aware_cleanup(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Robust edge extraction (ported from florian-retinoblastoma-vol)
+# Robust edge extraction (ported from florian-linear-tumor-vol)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def extract_edges(
@@ -446,7 +446,7 @@ def _filter_choroid_outliers(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3D cross-slice baseline interpolation (from retinoblastoma-vol)
+# 3D cross-slice baseline interpolation (from linear-tumor-vol)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def interpolate_baselines_3d(
@@ -590,15 +590,15 @@ def compute_tumor_mask_volume(
     """
     Run the hybrid tumor detection pipeline over a 3-D volume.
 
-    This combines the best approaches from both florian-tumor-vol and
-    florian-retinoblastoma-vol:
+    This combines the best approaches from both florian-quadratic-tumor-vol and
+    florian-linear-tumor-vol:
 
     1. Robust edge extraction — group-based filtering to reject vitreous
-       seeds and thin artifacts (from retinoblastoma-vol)
+       seeds and thin artifacts (from linear-tumor-vol)
     2. Quadratic (k=2) spline fitting — both retinal and choroid baselines
        use degree-2 parabolic splines matching the natural globe curvature
     3. 3D cross-slice interpolation — fills missing baselines across the
-       Z-axis for slices where fitting fails (from retinoblastoma-vol)
+       Z-axis for slices where fitting fails (from linear-tumor-vol)
     4. Adaptive edge blanking — data-boundary-relative column blanking
     5. Optional diagnostic lines — retinal curve (label 4) and choroid
        baseline (label 5) overlaid on the output mask

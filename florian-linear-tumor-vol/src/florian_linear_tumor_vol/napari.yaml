@@ -1,0 +1,11 @@
+name: florian-linear-tumor-vol
+display_name: Retinoblastoma Tumor Volumetry
+contributions:
+  commands:
+    - id: florian-linear-tumor-vol.retinoblastoma_widget
+      python_name: florian_linear_tumor_vol.widgets:RetinoblastomaWidget
+      title: Generate Tumor Mask (Linear)
+  widgets:
+    - command: florian-linear-tumor-vol.retinoblastoma_widget
+      display_name: Linear Tumor Volumetry
+      autogenerate: false

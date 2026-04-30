@@ -1,0 +1,12 @@
+schema_version: 0.1.0
+name: florian-quadratic-tumor-vol
+display_name: Quadratic Tumor Volumetry Mask (Quadratic)
+contributions:
+  commands:
+    - id: florian-quadratic-tumor-vol.tumor_volume
+      title: Quadratic Tumor Volumetry
+      python_name: florian_quadratic_tumor_vol._tumor_widget:TumorVolumeWidget
+  widgets:
+    - command: florian-quadratic-tumor-vol.tumor_volume
+      display_name: Quadratic Tumor Volumetry
+      autogenerate: false

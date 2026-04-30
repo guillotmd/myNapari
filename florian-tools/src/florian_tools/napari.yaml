@@ -7,10 +7,10 @@ contributions:
       python_name: florian_tools._widgets:BatchUNPWidget
       title: UNP Batch Processing
     - id: florian-tools.tumor_volume
-      python_name: florian_tumor_vol._tumor_widget:TumorVolumeWidget
+      python_name: florian_quadratic_tumor_vol._tumor_widget:TumorVolumeWidget
       title: Generate Tumor Mask (Quadratic)
     - id: florian-tools.retinoblastoma_volume
-      python_name: florian_retinoblastoma_vol.widgets:RetinoblastomaWidget
+      python_name: florian_linear_tumor_vol.widgets:RetinoblastomaWidget
       title: Generate Tumor Mask (Linear)
     - id: florian-tools.bscan_seg_cpu
       python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_cpu

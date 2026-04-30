@@ -10,7 +10,7 @@ from qtpy.QtWidgets import (
     QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QPushButton, QLabel, QScrollArea
 )
 
-from florian_retinoblastoma_vol.plugin import execute_retinoblastoma_pipeline
+from florian_linear_tumor_vol.plugin import execute_retinoblastoma_pipeline
 
 class RetinoblastomaWidget(QWidget):
     """Modern Napari QWidget for Retinoblastoma Volumetric Measurement."""
@@ -417,7 +417,7 @@ class RetinoblastomaWidget(QWidget):
             compute_uncertainty=self._compute_uncertainty.isChecked()
         )
         
-        from florian_retinoblastoma_vol.plugin import recalculate_volume
+        from florian_linear_tumor_vol.plugin import recalculate_volume
         volume, uncertainty = recalculate_volume(output_layer.data, self._output_tumor_label.value(), params)
         if uncertainty > 0:
             self._result_label.setText(f"Volume: {volume:.4f} ± {uncertainty:.4f} mm³")

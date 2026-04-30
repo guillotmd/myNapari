@@ -12,7 +12,7 @@ from qtpy.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox,
     QLabel, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
-from florian_tumor_vol._tumor_funcs import compute_tumor_mask_volume, compute_tumor_volume_mm3
+from florian_quadratic_tumor_vol._tumor_funcs import compute_tumor_mask_volume, compute_tumor_volume_mm3
 
 
 class TumorVolumeWidget(QWidget):

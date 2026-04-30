@@ -1,5 +1,5 @@
 """
-Smoke tests for florian_tumor_vol._tumor_funcs — quadratic dual-spline algorithm.
+Smoke tests for florian_quadratic_tumor_vol._tumor_funcs — quadratic dual-spline algorithm.
 
 Detection:  retinal surface is elevated vs. retinal baseline spline (k=2)
 Extent:     mask fills from elevated dome to choroid baseline spline (k=2)
@@ -9,7 +9,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import numpy as np
-from florian_tumor_vol._tumor_funcs import (
+from florian_quadratic_tumor_vol._tumor_funcs import (
     extract_edges,
     extract_anterior_surface,
     extract_posterior_surface,
