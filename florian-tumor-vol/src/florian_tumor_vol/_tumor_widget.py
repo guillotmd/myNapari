@@ -158,6 +158,26 @@ class TumorVolumeWidget(QWidget):
 
         layout.addWidget(opt_group)
 
+        # ── Advanced Options ──────────────────────────────────────────────
+        adv_group = QGroupBox("Advanced Options")
+        adv_form = QFormLayout(adv_group)
+
+        self._use_morphological_cleanup = QCheckBox("Morphological cleanup")
+        self._use_morphological_cleanup.setChecked(False)
+        self._use_morphological_cleanup.setToolTip(
+            "Apply binary opening → closing → keep largest component.\n"
+            "Removes isolated noise voxels and fills small holes.")
+        adv_form.addRow(self._use_morphological_cleanup)
+
+        self._use_weighted_fitting = QCheckBox("Weighted baseline fitting")
+        self._use_weighted_fitting.setChecked(False)
+        self._use_weighted_fitting.setToolTip(
+            "Upweight columns far from the tumor boundary when fitting\n"
+            "baselines. Downweights columns near the tumor edge.")
+        adv_form.addRow(self._use_weighted_fitting)
+
+        layout.addWidget(adv_group)
+
         # ── Voxel / physical dimensions ───────────────────────────────────
         vox_group = QGroupBox("Physical Voxel Size (mm)")
         vox_form = QFormLayout(vox_group)
@@ -295,6 +315,8 @@ class TumorVolumeWidget(QWidget):
             vol_name=vol_layer.name,
             generate_3d_render=self._generate_3d.isChecked(),
             mesh_smoothing_iters=self._mesh_smoothing.value(),
+            use_morphological_cleanup=self._use_morphological_cleanup.isChecked(),
+            use_weighted_fitting=self._use_weighted_fitting.isChecked(),
         )
 
         self._run_btn.setEnabled(False)
@@ -302,10 +324,15 @@ class TumorVolumeWidget(QWidget):
         show_info("Tumor detection started…")
 
         worker = _run_detection_thread(**params)
+        worker.yielded.connect(self._on_progress)
         worker.returned.connect(self._on_detection_finished)
         worker.errored.connect(self._on_error)
         worker.start()
         self._worker = worker
+
+    def _on_progress(self, msg: str):
+        """Update button text with pipeline progress."""
+        self._run_btn.setText(msg)
 
     def _build_roi_mask(self, roi_layer, vol_shape):
         if roi_layer is None:
@@ -399,43 +426,78 @@ def _run_detection_thread(
     robust_sigma, robust_iters, enface_roi_mask, voxel_size_mm,
     min_layer_thickness, ignore_top_px, show_diagnostic_lines,
     vol_name, generate_3d_render, mesh_smoothing_iters,
+    use_morphological_cleanup, use_weighted_fitting,
 ):
-    tumor_mask, volume_mm3 = compute_tumor_mask_volume(
-        vol_img=vol_img,
-        vol_labels=vol_labels,
-        anterior_label_val=anterior_label_val,
-        baseline_label_val=baseline_label_val,
-        spline_smoothing=spline_smoothing,
-        min_elevation_px=min_elevation_px,
-        edge_margin_cols=edge_margin_cols,
-        margin_below_px=margin_below_px,
-        robust_sigma=robust_sigma,
-        robust_iters=robust_iters,
-        tumor_label_val=tumor_label_val,
-        enface_roi_mask=enface_roi_mask,
-        voxel_size_mm=voxel_size_mm,
-        min_layer_thickness=min_layer_thickness,
-        ignore_top_px=ignore_top_px,
-        show_diagnostic_lines=show_diagnostic_lines,
-    )
+    import queue, threading
 
-    # Optional 3D mesh generation
-    mesh_data = None
-    if generate_3d_render:
+    progress_q = queue.Queue()
+    result_holder = [None, None]  # [result, error]
+
+    def _cb(msg):
+        progress_q.put(msg)
+
+    def _run():
         try:
-            from skimage.measure import marching_cubes
-            import trimesh
-            bool_vol = (tumor_mask == tumor_label_val)
-            spacing = (voxel_size_mm[0], voxel_size_mm[1], voxel_size_mm[2])
-            verts, faces, _, _ = marching_cubes(bool_vol, level=0.5, spacing=spacing)
-            if mesh_smoothing_iters > 0 and len(verts) > 0:
-                mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-                trimesh.smoothing.filter_laplacian(mesh, iterations=mesh_smoothing_iters)
-                verts = mesh.vertices
-                faces = mesh.faces
-            if len(verts) > 0:
-                mesh_data = (verts, faces, np.ones(len(verts)))
-        except Exception as e:
-            print(f"3D mesh generation failed: {e}")
+            tumor_mask, volume_mm3 = compute_tumor_mask_volume(
+                vol_img=vol_img,
+                vol_labels=vol_labels,
+                anterior_label_val=anterior_label_val,
+                baseline_label_val=baseline_label_val,
+                spline_smoothing=spline_smoothing,
+                min_elevation_px=min_elevation_px,
+                edge_margin_cols=edge_margin_cols,
+                margin_below_px=margin_below_px,
+                robust_sigma=robust_sigma,
+                robust_iters=robust_iters,
+                tumor_label_val=tumor_label_val,
+                enface_roi_mask=enface_roi_mask,
+                voxel_size_mm=voxel_size_mm,
+                min_layer_thickness=min_layer_thickness,
+                ignore_top_px=ignore_top_px,
+                show_diagnostic_lines=show_diagnostic_lines,
+                use_morphological_cleanup=use_morphological_cleanup,
+                use_weighted_fitting=use_weighted_fitting,
+                progress_callback=_cb,
+            )
 
-    return tumor_mask, volume_mm3, vol_name, tumor_label_val, voxel_size_mm, mesh_data
+            # Optional 3D mesh generation
+            _cb("⏳ Generating 3D mesh…")
+            mesh_data = None
+            if generate_3d_render:
+                try:
+                    from skimage.measure import marching_cubes
+                    import trimesh
+                    bool_vol = (tumor_mask == tumor_label_val)
+                    spacing = (voxel_size_mm[0], voxel_size_mm[1], voxel_size_mm[2])
+                    verts, faces, _, _ = marching_cubes(bool_vol, level=0.5, spacing=spacing)
+                    if mesh_smoothing_iters > 0 and len(verts) > 0:
+                        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+                        trimesh.smoothing.filter_laplacian(mesh, iterations=mesh_smoothing_iters)
+                        verts = mesh.vertices
+                        faces = mesh.faces
+                    if len(verts) > 0:
+                        mesh_data = (verts, faces, np.ones(len(verts)))
+                except Exception as e:
+                    print(f"3D mesh generation failed: {e}")
+
+            result_holder[0] = (tumor_mask, volume_mm3, vol_name, tumor_label_val, voxel_size_mm, mesh_data)
+        except Exception as e:
+            result_holder[1] = e
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    while t.is_alive():
+        try:
+            msg = progress_q.get(timeout=0.1)
+            yield msg
+        except queue.Empty:
+            pass
+
+    while not progress_q.empty():
+        yield progress_q.get_nowait()
+
+    if result_holder[1] is not None:
+        raise result_holder[1]
+
+    return result_holder[0]

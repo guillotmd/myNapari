@@ -176,6 +176,57 @@ class RetinoblastomaWidget(QWidget):
 
         layout.addWidget(opt_group)
 
+        # ── 7. Advanced Improvements ──────────────────────────────────────────
+        adv_group = QGroupBox("Advanced Options (off = original behavior)")
+        adv_form = QFormLayout(adv_group)
+
+        self._use_choroid_filter = QCheckBox("Filter choroid outliers")
+        self._use_choroid_filter.setChecked(False)
+        self._use_choroid_filter.setToolTip(
+            "Reject choroid detections that appear ABOVE the retina or\n"
+            "significantly above the expected choroid baseline.\n"
+            "Fixes ONNX mislabeling of tumor tissue as choroid.")
+        adv_form.addRow(self._use_choroid_filter)
+
+        self._use_morphological_cleanup = QCheckBox("Morphological cleanup")
+        self._use_morphological_cleanup.setChecked(False)
+        self._use_morphological_cleanup.setToolTip(
+            "Apply binary opening → closing → keep largest component.\n"
+            "Removes isolated noise voxels and fills small holes.")
+        adv_form.addRow(self._use_morphological_cleanup)
+
+        self._interpolation_mode = QComboBox()
+        self._interpolation_mode.addItems(["linear", "pchip"])
+        self._add_row(adv_form, "Interpolation mode:", self._interpolation_mode,
+            "Baseline interpolation method across the tumor gap:\n"
+            "• linear — straight line (original, default)\n"
+            "• pchip — monotone cubic Hermite (gentle curve, no overshoot)")
+
+        self._use_weighted_fitting = QCheckBox("Weighted baseline fitting")
+        self._use_weighted_fitting.setChecked(False)
+        self._use_weighted_fitting.setToolTip(
+            "Upweight columns far from the tumor boundary when fitting\n"
+            "baselines. Downweights columns near the tumor edge that\n"
+            "may be partially affected.")
+        adv_form.addRow(self._use_weighted_fitting)
+
+        self._smoothing_sigma = QDoubleSpinBox()
+        self._smoothing_sigma.setRange(0.0, 100.0)
+        self._smoothing_sigma.setDecimals(1)
+        self._smoothing_sigma.setValue(20.0)
+        self._add_row(adv_form, "Smoothing sigma:", self._smoothing_sigma,
+            "Gaussian smoothing sigma for baseline curves.\n"
+            "Higher = smoother. Default 20.0.")
+
+        self._compute_uncertainty = QCheckBox("Estimate volume uncertainty")
+        self._compute_uncertainty.setChecked(False)
+        self._compute_uncertainty.setToolTip(
+            "Perturb the elevation threshold ±1px and report the\n"
+            "volume range as an uncertainty estimate.")
+        adv_form.addRow(self._compute_uncertainty)
+
+        layout.addWidget(adv_group)
+
         # ── 7. Action Buttons ─────────────────────────────────────────────────
         self._run_btn = QPushButton("▶ Calculate Tumor Volume")
         self._run_btn.setFixedHeight(40)
@@ -276,6 +327,13 @@ class RetinoblastomaWidget(QWidget):
             generate_3d_render=self._generate_3d.isChecked(),
             show_diagnostic_lines=self._show_diagnostic_lines.isChecked(),
             bscan_name=bscan_layer.name,
+            # Advanced improvement toggles
+            use_choroid_filter=self._use_choroid_filter.isChecked(),
+            use_morphological_cleanup=self._use_morphological_cleanup.isChecked(),
+            interpolation_mode=self._interpolation_mode.currentText(),
+            use_weighted_fitting=self._use_weighted_fitting.isChecked(),
+            smoothing_sigma=self._smoothing_sigma.value(),
+            compute_uncertainty=self._compute_uncertainty.isChecked(),
         )
 
         self._run_btn.setEnabled(False)
@@ -284,9 +342,14 @@ class RetinoblastomaWidget(QWidget):
 
         # We pass the data rather than the layer objects to the thread worker
         worker = _run_pipeline_thread(params)
+        worker.yielded.connect(self._on_progress)
         worker.returned.connect(self._on_pipeline_finished)
         worker.errored.connect(self._on_error)
         worker.start()
+
+    def _on_progress(self, msg: str):
+        """Update button text with pipeline progress."""
+        self._run_btn.setText(msg)
 
     def _on_pipeline_finished(self, result):
         if result is None:
@@ -315,7 +378,10 @@ class RetinoblastomaWidget(QWidget):
             else:
                 self.viewer.add_surface((verts, faces, vals), name=surface_name, colormap="turbo")
 
-        self._result_label.setText(f"Volume: {volume:.4f} mm³ ± {uncertainty:.4f}")
+        if uncertainty > 0:
+            self._result_label.setText(f"Volume: {volume:.4f} ± {uncertainty:.4f} mm³")
+        else:
+            self._result_label.setText(f"Volume: {volume:.4f} mm³")
         show_info(f"Pipeline Complete! Volume: {volume:.4f} mm³")
         
         self._run_btn.setEnabled(True)
@@ -347,21 +413,58 @@ class RetinoblastomaWidget(QWidget):
         params = dict(
             axial_resolution=self._axial_res.value(),
             lateral_resolution=self._lateral_res.value(),
-            inter_slice_spacing=self._spacing.value()
+            inter_slice_spacing=self._spacing.value(),
+            compute_uncertainty=self._compute_uncertainty.isChecked()
         )
         
         from florian_retinoblastoma_vol.plugin import recalculate_volume
-        vol_mm3 = recalculate_volume(output_layer.data, self._output_tumor_label.value(), params)
-        self._result_label.setText(f"Volume: {vol_mm3:.4f} mm³")
-        show_info(f"Recalculated Volume: {vol_mm3:.4f} mm³")
+        volume, uncertainty = recalculate_volume(output_layer.data, self._output_tumor_label.value(), params)
+        if uncertainty > 0:
+            self._result_label.setText(f"Volume: {volume:.4f} ± {uncertainty:.4f} mm³")
+        else:
+            self._result_label.setText(f"Volume: {volume:.4f} mm³")
+        show_info(f"Volume: {volume:.4f} ± {uncertainty:.4f} mm³")
 
 
 
 @thread_worker
 def _run_pipeline_thread(params: dict):
     """
-    Run the logic defined in plugin.py on a background thread.
-    Returns:
-        (tumor_mask, volume, uncertainty, mesh_data, output_tumor_label)
+    Run the pipeline on a background thread.
+    Uses a queue + callback to relay real-time progress to the UI.
     """
-    return execute_retinoblastoma_pipeline(params)
+    import queue, threading
+
+    progress_q = queue.Queue()
+    result_holder = [None, None]  # [result, error]
+
+    def _cb(msg):
+        progress_q.put(msg)
+
+    params['progress_callback'] = _cb
+
+    def _run():
+        try:
+            result_holder[0] = execute_retinoblastoma_pipeline(params)
+        except Exception as e:
+            result_holder[1] = e
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    # Yield progress updates as they arrive
+    while t.is_alive():
+        try:
+            msg = progress_q.get(timeout=0.1)
+            yield msg
+        except queue.Empty:
+            pass
+
+    # Drain remaining messages
+    while not progress_q.empty():
+        yield progress_q.get_nowait()
+
+    if result_holder[1] is not None:
+        raise result_holder[1]
+
+    return result_holder[0]

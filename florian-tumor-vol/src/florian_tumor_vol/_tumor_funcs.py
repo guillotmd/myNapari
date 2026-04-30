@@ -52,6 +52,79 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.interpolate import UnivariateSpline, interp1d
+from scipy.ndimage import binary_opening, binary_closing, label as ndlabel
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Progress bar helper — fixed-width output to prevent \r overwrite artifacts
+# ──────────────────────────────────────────────────────────────────────────────
+
+_BAR_WIDTH = 30
+_LINE_PAD = 80
+_progress_callback = None
+
+
+def _progress(phase: str, i: int, total: int, done: bool = False):
+    """Print a fixed-width progress bar that overwrites in-place."""
+    filled = _BAR_WIDTH if done else ((i + 1) * _BAR_WIDTH // total)
+    bar = '█' * filled + ' ' * (_BAR_WIDTH - filled)
+    check = ' ✓' if done else ''
+    msg = f"\r  {phase} [{bar}] {i+1 if not done else total}/{total}{check}"
+    print(msg.ljust(_LINE_PAD), end="" if not done else "\n", flush=True)
+    if _progress_callback is not None:
+        pct = 100 if done else int((i + 1) * 100 / total)
+        short_phase = phase.split('—')[-1].strip().rstrip(':')
+        _progress_callback(f"⏳ {short_phase}… {pct}%")
+
+
+def _roi_aware_cleanup(
+    tumor_mask_3d: np.ndarray,
+    tumor_label_val: int,
+    enface_roi_mask: np.ndarray | None,
+    min_component_size: int = 50,
+):
+    """
+    ROI-aware morphological cleanup.
+
+    1. Binary opening/closing to remove noise and fill holes.
+    2. Label connected components in 3-D.
+    3. For each component:
+       - If en-face ROI provided: keep any component whose Z-X footprint
+         overlaps a highlighted ROI region.  Remove only components with
+         ZERO overlap that are also smaller than min_component_size.
+       - If no ROI: remove components < min_component_size.
+    """
+    mask_bool = (tumor_mask_3d == tumor_label_val)
+    mask_bool = binary_opening(mask_bool, iterations=1)
+    mask_bool = binary_closing(mask_bool, iterations=1)
+
+    labeled_arr, n_components = ndlabel(mask_bool)
+    if n_components <= 1:
+        tumor_mask_3d[tumor_mask_3d == tumor_label_val] = 0
+        tumor_mask_3d[mask_bool] = tumor_label_val
+        return tumor_mask_3d
+
+    has_roi = (enface_roi_mask is not None)
+
+    for c in range(1, n_components + 1):
+        comp_mask = (labeled_arr == c)
+        comp_size = int(np.sum(comp_mask))
+
+        if has_roi:
+            # Project 3D component to Z-X footprint (collapse depth axis)
+            footprint_zx = comp_mask.any(axis=1)  # (Z, W)
+            overlap = int(np.sum(footprint_zx & enface_roi_mask))
+            if overlap > 0:
+                continue  # overlaps with user-highlighted tumor → KEEP
+            if comp_size < min_component_size:
+                mask_bool[comp_mask] = False
+        else:
+            if comp_size < min_component_size:
+                mask_bool[comp_mask] = False
+
+    tumor_mask_3d[tumor_mask_3d == tumor_label_val] = 0
+    tumor_mask_3d[mask_bool] = tumor_label_val
+    return tumor_mask_3d
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -510,6 +583,9 @@ def compute_tumor_mask_volume(
     min_layer_thickness: int = 5,
     ignore_top_px: int = 0,
     show_diagnostic_lines: bool = False,
+    use_morphological_cleanup: bool = False,
+    use_weighted_fitting: bool = False,
+    progress_callback=None,
 ) -> tuple[np.ndarray, float]:
     """
     Run the hybrid tumor detection pipeline over a 3-D volume.
@@ -553,6 +629,9 @@ def compute_tumor_mask_volume(
     D, H, W = vol_labels.shape
     tumor_mask_3d = np.zeros((D, H, W), dtype=np.uint8)
 
+    global _progress_callback
+    _progress_callback = progress_callback
+
     print(f"\n{'='*60}")
     print(f"  Tumor Detection Pipeline — {D} B-scans, {H}×{W} px")
     print(f"{'='*60}")
@@ -562,9 +641,7 @@ def compute_tumor_mask_volume(
     choroid_surfaces_raw = {}
 
     for bscan_idx in range(D):
-        print(f"\r  Phase 1/4 — Extracting edges: "
-              f"[{'█' * ((bscan_idx+1)*30//D)}{' ' * (30-(bscan_idx+1)*30//D)}] "
-              f"{bscan_idx+1}/{D}", end="", flush=True)
+        _progress("Phase 1/4 — Extracting edges:", bscan_idx, D)
 
         retina_surface, choroid_surface = extract_edges(
             vol_labels[bscan_idx],
@@ -576,8 +653,7 @@ def compute_tumor_mask_volume(
         retina_surfaces[bscan_idx] = retina_surface
         choroid_surfaces_raw[bscan_idx] = choroid_surface
 
-    print(f"\r  Phase 1/4 — Extracting edges: "
-          f"[{'█'*30}] {D}/{D} ✓                  ")
+    _progress("Phase 1/4 — Extracting edges:", D, D, done=True)
 
     # Phase 1.5: Choroid sanity filter
     # The ONNX segmentation sometimes mislabels tumor tissue as "choroid".
@@ -586,9 +662,7 @@ def compute_tumor_mask_volume(
     # We reject them before fitting the final baselines.
     choroid_surfaces = {}
     for bscan_idx in range(D):
-        print(f"\r  Phase 2/4 — Filtering choroid outliers: "
-              f"[{'█' * ((bscan_idx+1)*30//D)}{' ' * (30-(bscan_idx+1)*30//D)}] "
-              f"{bscan_idx+1}/{D}", end="", flush=True)
+        _progress("Phase 2/4 — Filtering outliers:", bscan_idx, D)
 
         retina_s = retina_surfaces[bscan_idx]
         choroid_s = choroid_surfaces_raw[bscan_idx]
@@ -607,17 +681,14 @@ def compute_tumor_mask_volume(
             max_above_retina_px=margin_above_px,
         )
 
-    print(f"\r  Phase 2/4 — Filtering choroid outliers: "
-          f"[{'█'*30}] {D}/{D} ✓                  ")
+    _progress("Phase 2/4 — Filtering outliers:", D, D, done=True)
 
     # Phase 2: Fit per-slice baselines from healthy columns
     retinal_baselines_dict = {}
     choroid_baselines_dict = {}
 
     for bscan_idx in range(D):
-        print(f"\r  Phase 3/4 — Fitting quadratic baselines: "
-              f"[{'█' * ((bscan_idx+1)*30//D)}{' ' * (30-(bscan_idx+1)*30//D)}] "
-              f"{bscan_idx+1}/{D}", end="", flush=True)
+        _progress("Phase 3/4 — Fitting baselines:", bscan_idx, D)
 
         retina_surface = retina_surfaces[bscan_idx]
         choroid_surface = choroid_surfaces[bscan_idx]
@@ -661,8 +732,7 @@ def compute_tumor_mask_volume(
         if choroid_baseline is not None:
             choroid_baselines_dict[bscan_idx] = choroid_baseline
 
-    print(f"\r  Phase 3/4 — Fitting quadratic baselines: "
-          f"[{'█'*30}] {D}/{D} ✓                  ")
+    _progress("Phase 3/4 — Fitting baselines:", D, D, done=True)
 
     # 3D cross-slice interpolation — fill gaps where per-slice fitting
     # failed by interpolating from neighbouring successful slices
@@ -673,9 +743,7 @@ def compute_tumor_mask_volume(
 
     # Phase 4: Build masks and (optionally) draw diagnostic lines
     for bscan_idx in range(D):
-        print(f"\r  Phase 4/4 — Building tumor masks: "
-              f"[{'█' * ((bscan_idx+1)*30//D)}{' ' * (30-(bscan_idx+1)*30//D)}] "
-              f"{bscan_idx+1}/{D}", end="", flush=True)
+        _progress("Phase 4/4 — Building masks:", bscan_idx, D)
 
         r_surf = full_retina_surfaces[bscan_idx]
         r_base = full_retinal_baselines[bscan_idx]
@@ -722,8 +790,16 @@ def compute_tumor_mask_volume(
                     if 0 <= y < H:
                         tumor_mask_3d[bscan_idx, max(0, y-1):min(H, y+2), x] = 4
 
-    print(f"\r  Phase 4/4 — Building tumor masks: "
-          f"[{'█'*30}] {D}/{D} ✓                  ")
+    _progress("Phase 4/4 — Building masks:", D, D, done=True)
+
+    # Optional morphological cleanup (ROI-aware)
+    if use_morphological_cleanup:
+        print("  Cleaning up (ROI-aware)...")
+        tumor_mask_3d = _roi_aware_cleanup(
+            tumor_mask_3d, tumor_label_val,
+            enface_roi_mask=enface_roi_mask,
+            min_component_size=50,
+        )
 
     volume_mm3 = compute_tumor_volume_mm3(
         tumor_mask_3d,
@@ -735,4 +811,5 @@ def compute_tumor_mask_volume(
     print(f"\n  ✅ Done — {n_tumor:,} tumor voxels, volume = {volume_mm3:.4f} mm³")
     print(f"{'='*60}\n")
 
+    _progress_callback = None
     return tumor_mask_3d, volume_mm3
