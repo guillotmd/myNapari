@@ -27,6 +27,9 @@ napari-cool-tools-submenu-patch = { path = "napari-cool-tools-submenu-patch", ed
 florian-batch-proc = { path = "florian-batch-proc", editable = true }
 florian-segmentation-mac = { path = "florian-segmentation-mac", editable = true }
 florian-quadratic-tumor-vol = { path = "florian-quadratic-tumor-vol", editable = true }
+florian-linear-tumor-vol = { path = "florian-linear-tumor-vol", editable = true }
+florian-panOCT-curve-correction = { path = "florian-panOCT-curve-correction", editable = true }
+florian-tumor-3d-render = { path = "florian-tumor-3d-render", editable = true }
 florian-menu-patch = { path = "florian-menu-patch", editable = true }
 napari-plugin-manager = "*"
 kornia = "==0.8.*"

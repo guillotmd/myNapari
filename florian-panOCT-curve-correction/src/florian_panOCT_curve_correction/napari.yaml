@@ -1,0 +1,13 @@
+schema_version: 0.1.0
+name: florian-panOCT-curve-correction
+display_name: PanOCT Curve Correction
+contributions:
+  commands:
+    - id: florian-panOCT-curve-correction.widget
+      python_name: florian_panOCT_curve_correction._widget:CurveCorrectionWidget
+      title: PanOCT Curve Correction
+
+  widgets:
+    - command: florian-panOCT-curve-correction.widget
+      display_name: PanOCT Curve Correction
+      autogenerate: false

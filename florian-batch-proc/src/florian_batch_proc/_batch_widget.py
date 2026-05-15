@@ -478,7 +478,7 @@ class BatchUNPWidget(QWidget):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 4, 0, 0)
 
-        self.btn_start = QPushButton("▶  Start Processing")
+        self.btn_start = QPushButton("Start Processing")
         self.btn_start.setObjectName("startButton")
         self.btn_start.clicked.connect(self._start_processing)
         self.btn_start.setEnabled(False)

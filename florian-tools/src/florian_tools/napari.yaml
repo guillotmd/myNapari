@@ -12,6 +12,15 @@ contributions:
     - id: florian-tools.retinoblastoma_volume
       python_name: florian_linear_tumor_vol.widgets:RetinoblastomaWidget
       title: Generate Tumor Mask (Linear)
+    - id: florian-tools.curve_correction
+      python_name: florian_panOCT_curve_correction._widget:CurveCorrectionWidget
+      title: PanOCT Curve Correction
+    - id: florian-tools.z_slice_crop
+      python_name: florian_z_slice_crop._widget:ZSliceCropWidget
+      title: Crop Z-Slices
+    - id: florian-tools.tumor_3d_render
+      python_name: florian_tumor_3d_render._widget:TumorRenderWidget
+      title: Generate 3D Tumor Render
     - id: florian-tools.bscan_seg_cpu
       python_name: florian_segmentation_mac._segmentation:bscan_onnx_seg_plugin_cpu
       title: TEST B-scan Seg (Mac CPU)
@@ -40,6 +49,15 @@ contributions:
       autogenerate: false
     - command: florian-tools.retinoblastoma_volume
       display_name: Generate Tumor Mask (Linear)
+      autogenerate: false
+    - command: florian-tools.curve_correction
+      display_name: PanOCT Curve Correction
+      autogenerate: false
+    - command: florian-tools.z_slice_crop
+      display_name: Crop Z-Slices
+      autogenerate: false
+    - command: florian-tools.tumor_3d_render
+      display_name: Generate 3D Tumor Render
       autogenerate: false
     - command: florian-tools.bscan_seg_cpu
       display_name: TEST B-scan Seg (Mac CPU)

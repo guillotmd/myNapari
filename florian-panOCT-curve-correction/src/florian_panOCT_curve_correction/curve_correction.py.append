@@ -1,0 +1,135 @@
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volume-level correction — Full 3D Interpolation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def correct_volume_3d_full(
+    volume: np.ndarray,
+    params: CurveCorrectionParams,
+    is_labels: bool = False,
+    progress_callback=None,
+    chunk_size_z: int = 32,
+) -> np.ndarray:
+    """Apply full 3D interpolation correction to a volume.
+
+    Unlike correct_volume_slicewise which processes each B-scan independently,
+    this maps the full 3D Cartesian output volume directly from the 3D source.
+    This enables inter-slice interpolation along the slow axis, at the cost of
+    higher memory usage.
+
+    Processed in chunks along the output Z (depth) axis to control RAM.
+
+    Parameters
+    ----------
+    volume            : (D, H, W) array
+    params            : calibration parameters
+    is_labels         : use nearest-neighbour (order=0) for label masks
+    progress_callback : optional callable(str) for UI progress updates
+    chunk_size_z      : number of depth slices to compute simultaneously
+    """
+    D, H, W = volume.shape
+    if params.n_axial_pixels != H:
+        params = dataclasses.replace(params, n_axial_pixels=H)
+
+    order = 0 if is_labels else 1
+    delta_r = params.delta_r_mm
+
+    theta_fast, theta_slow, R, grid = _compute_3d_output_geometry(
+        H, W, D, params)
+
+    H_out, W_out = grid['H_out'], grid['W_out']
+    x_min, x_max = grid['x_min'], grid['x_max']
+    z_top, z_max = grid['z_top'], grid['z_max']
+
+    # D_out = D to preserve the number of slices in slow axis,
+    # but their physical spacing is dictated by out_res.
+    # The slow axis maps linearly to theta_slow indices.
+    D_out = D
+    
+    # We maintain isotropic resolution laterally and axially
+    out_res = grid['out_res']
+    
+    # Y physical coordinates (slow axis) for the output slices.
+    # We space the output slices physically by out_res, centered around 0.
+    y_max = (D_out / 2.0) * out_res
+    y_out = np.linspace(-y_max, y_max, D_out, dtype=np.float64)
+    x_out = np.linspace(x_min, x_max, W_out, dtype=np.float64)
+    z_out = np.linspace(z_top, z_max, H_out, dtype=np.float64)
+
+    corrected = np.zeros((D_out, H_out, W_out), dtype=volume.dtype)
+
+    # Process in Z chunks to save memory
+    z_chunks = list(range(0, H_out, chunk_size_z))
+    total_chunks = len(z_chunks)
+
+    # We need 3D meshgrids for (y, z, x). Note order: (D_out, chunk_z, W_out)
+    for chunk_idx, z_start in enumerate(z_chunks):
+        if progress_callback is not None:
+            pct = int(chunk_idx * 100 / total_chunks)
+            progress_callback(f"⏳ Full 3D correcting… {pct}%")
+
+        z_end = min(z_start + chunk_size_z, H_out)
+        z_chunk_out = z_out[z_start:z_end]
+        
+        y_grid, z_grid, x_grid = np.meshgrid(y_out, z_chunk_out, x_out, indexing='ij')
+
+        # 1. Cartesian to Spherical
+        # φ = arccos(z/R) -> z = R·cos(φ) => R = z / cos(φ)
+        # R = √(x² + y² + z²)
+        R_src = np.sqrt(x_grid**2 + y_grid**2 + z_grid**2)
+        
+        # Avoid divide by zero
+        R_safe = np.maximum(R_src, 1e-9)
+        
+        # φ (total polar angle from z-axis)
+        phi = np.arccos(np.clip(z_grid / R_safe, -1.0, 1.0))
+        
+        # θ (azimuth angle in xy plane)
+        # In paper: x = R·sin(φ)·cos(θ_az), y = R·sin(φ)·sin(θ_az)
+        # Here we need to map to θ_fast and θ_slow.
+        # Paper Eq 2: φ = √(θ_x² + θ_y²), θ_az = arctan(θ_x/θ_y)
+        # By substitution: θ_x = φ · sin(θ_az) and θ_y = φ · cos(θ_az)
+        
+        # Since x is fast and y is slow:
+        # θ_fast ≈ φ * (x / √(x²+y²))
+        # θ_slow ≈ φ * (y / √(x²+y²))
+        
+        lat_r = np.sqrt(x_grid**2 + y_grid**2)
+        lat_r_safe = np.maximum(lat_r, 1e-9)
+        
+        theta_fast_src = phi * (x_grid / lat_r_safe)
+        theta_slow_src = phi * (y_grid / lat_r_safe)
+
+        # 2. Spherical to Image Indices
+        # R -> row
+        row_src = (R_src - params.pivot_distance_mm) / delta_r
+
+        # θ_fast -> col
+        N_W = W / 2.0
+        theta_max_fast_rad = np.deg2rad(params.theta_max_fast_deg)
+        theta_off_fast_rad = np.deg2rad(params.theta_offset_fast_deg)
+        col_src = ((theta_fast_src - theta_off_fast_rad) / theta_max_fast_rad) * N_W + N_W
+
+        # θ_slow -> slice
+        N_D = D / 2.0
+        theta_max_slow_rad = np.deg2rad(params.theta_max_slow_deg)
+        theta_off_slow_rad = np.deg2rad(params.theta_offset_slow_deg)
+        slice_src = ((theta_slow_src - theta_off_slow_rad) / theta_max_slow_rad) * N_D + N_D
+
+        coords = np.array([slice_src.ravel(), row_src.ravel(), col_src.ravel()])
+        
+        chunk_corrected = map_coordinates(
+            volume.astype(np.float64), coords,
+            order=order, mode='constant', cval=0.0,
+        ).reshape((D_out, z_end - z_start, W_out))
+
+        if volume.dtype.kind in ('u', 'i'):
+            info = np.iinfo(volume.dtype)
+            chunk_corrected = np.clip(chunk_corrected, info.min, info.max)
+            
+        corrected[:, z_start:z_end, :] = chunk_corrected.astype(volume.dtype)
+
+    if progress_callback is not None:
+        progress_callback("⏳ Full 3D correction done")
+
+    return corrected

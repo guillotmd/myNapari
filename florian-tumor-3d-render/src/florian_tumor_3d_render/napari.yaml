@@ -1,0 +1,13 @@
+schema_version: 0.1.0
+name: florian-tumor-3d-render
+display_name: Generate 3D Tumor Render
+contributions:
+  commands:
+    - id: florian-tumor-3d-render.widget
+      python_name: florian_tumor_3d_render._widget:TumorRenderWidget
+      title: Generate 3D Tumor Render
+
+  widgets:
+    - command: florian-tumor-3d-render.widget
+      display_name: Generate 3D Tumor Render
+      autogenerate: false

@@ -330,7 +330,7 @@ class BatchProcessorWorker(QObject):
                 if result:
                     success_count += 1
                     self.file_completed.emit(str(unp_path), "ok")
-                    self.log_message.emit("  ✓ Saved successfully")
+                    self.log_message.emit("  Saved successfully")
                 else:
                     fail_count += 1
                     self.file_completed.emit(str(unp_path), "skipped: no metadata")

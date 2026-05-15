@@ -3,19 +3,21 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "florian-linear-tumor-vol"
+name = "florian-tumor-3d-render"
 version = "0.0.1"
-description = "Napari plugin for measuring retinoblastoma tumor volume from UW-OCT B-scan images."
+description = "Napari plugin to generate 3D surface renders from tumor mask layers."
 authors = [{name = "Florian Guillot"}]
 dependencies = [
     "napari",
-    "magicgui",
     "numpy",
     "scipy",
     "scikit-image",
-    "scikit-learn",
-    "matplotlib",
-    "tifffile"
+    "trimesh"
 ]
 requires-python = ">=3.10"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]

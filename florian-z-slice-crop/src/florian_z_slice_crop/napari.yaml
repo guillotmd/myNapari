@@ -1,0 +1,13 @@
+schema_version: 0.1.0
+name: florian-z-slice-crop
+display_name: Crop Z-Slices
+contributions:
+  commands:
+    - id: florian-z-slice-crop.widget
+      python_name: florian_z_slice_crop._widget:ZSliceCropWidget
+      title: Crop Z-Slices
+
+  widgets:
+    - command: florian-z-slice-crop.widget
+      display_name: Crop Z-Slices
+      autogenerate: false

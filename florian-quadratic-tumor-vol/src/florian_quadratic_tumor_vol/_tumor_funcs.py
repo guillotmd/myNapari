@@ -68,13 +68,13 @@ def _progress(phase: str, i: int, total: int, done: bool = False):
     """Print a fixed-width progress bar that overwrites in-place."""
     filled = _BAR_WIDTH if done else ((i + 1) * _BAR_WIDTH // total)
     bar = '█' * filled + ' ' * (_BAR_WIDTH - filled)
-    check = ' ✓' if done else ''
+    check = ' (Done)' if done else ''
     msg = f"\r  {phase} [{bar}] {i+1 if not done else total}/{total}{check}"
     print(msg.ljust(_LINE_PAD), end="" if not done else "\n", flush=True)
     if _progress_callback is not None:
         pct = 100 if done else int((i + 1) * 100 / total)
         short_phase = phase.split('—')[-1].strip().rstrip(':')
-        _progress_callback(f"⏳ {short_phase}… {pct}%")
+        _progress_callback(f"{short_phase}... {pct}%")
 
 
 def _roi_aware_cleanup(

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "florian-z-slice-crop"
+version = "0.0.1"
+description = "Napari plugin to crop extra Z-slices from OCT volumes and masks."
+authors = [{name = "Florian Guillot"}]
+dependencies = [
+    "napari",
+    "numpy",
+]
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]
